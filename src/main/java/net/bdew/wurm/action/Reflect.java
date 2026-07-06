@@ -13,6 +13,7 @@ import org.gotti.wurmunlimited.modloader.ReflectionUtil;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.Optional;
 
 @SuppressWarnings("unchecked")
 public class Reflect {
@@ -37,23 +38,48 @@ public class Reflect {
         fldGroundItems = ReflectionUtil.getField(ServerConnectionListenerClass.class, "groundItems");
     }
 
-    public static InventoryMetaItem getBodyItem(PaperDollInventory pd) throws ReflectiveOperationException {
-        return ((PaperDollSlot) ReflectionUtil.getPrivateField(pd, fldBodyItem)).getItem();
+    public static Optional<InventoryMetaItem> getBodyItem(PaperDollInventory pd) {
+        try {
+            InventoryMetaItem item = ((PaperDollSlot) ReflectionUtil.getPrivateField(pd, fldBodyItem)).getItem();
+            return (item == null ? Optional.empty() : Optional.of(item));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
     }
 
-    public static InventoryMetaItem getActiveToolItem(HeadsUpDisplay hud) throws ReflectiveOperationException {
-        return ReflectionUtil.getPrivateField(hud, fldActiveToolItem);
+    public static Optional<InventoryMetaItem> getActiveToolItem(HeadsUpDisplay hud) {
+        try {
+            InventoryMetaItem item = ReflectionUtil.getPrivateField(hud, fldActiveToolItem);
+            return (item == null ? Optional.empty() : Optional.of(item));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
     }
 
-    public static PickableUnit getSelectedUnit(SelectBar s) throws ReflectiveOperationException {
-        return ReflectionUtil.getPrivateField(s, fldSelectedUnit);
+    public static Optional<PickableUnit> getSelectedUnit(SelectBar s) {
+        try {
+            PickableUnit unit = ReflectionUtil.getPrivateField(s, fldSelectedUnit);
+            return (unit == null ? Optional.empty() : Optional.of(unit));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
     }
 
-    public static PaperDollSlot getFrameFromSlotnumber(PaperDollInventory pd, byte slot) throws ReflectiveOperationException {
-        return ReflectionUtil.callPrivateMethod(pd, mGetFrameFromSlotnumber, slot);
+    public static Optional<PaperDollSlot> getFrameFromSlotnumber(PaperDollInventory pd, byte slot) {
+        try {
+            PaperDollSlot slotNumber = ReflectionUtil.callPrivateMethod(pd, mGetFrameFromSlotnumber, slot);
+            return (slotNumber == null ? Optional.empty() : Optional.of(slotNumber));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
     }
 
-    public static Map<Long, GroundItemCellRenderable> getGroundItems(ServerConnectionListenerClass conn) throws ReflectiveOperationException {
-        return ReflectionUtil.getPrivateField(conn, fldGroundItems);
+    public static Optional<Map<Long, GroundItemCellRenderable>> getGroundItems(ServerConnectionListenerClass conn) {
+        try {
+            Map<Long, GroundItemCellRenderable> items = ReflectionUtil.getPrivateField(conn, fldGroundItems);
+            return (items == null ? Optional.empty() : Optional.of(items));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
     }
 }

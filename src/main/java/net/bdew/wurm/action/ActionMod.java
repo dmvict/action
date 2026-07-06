@@ -61,19 +61,12 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
                 final String[] nextCmdSplit = nextCmd.trim().split(" ");
                 try {
                     if (nextCmdSplit.length == 2)
-                        if (nextCmdSplit[0].equals("default"))
-                            parseAct(Short.MIN_VALUE, nextCmdSplit[1]);
-                        else if (nextCmdSplit[0].equals("alt"))
-                            parseAct(Short.MAX_VALUE, nextCmdSplit[1]);
-                        else 
-                            parseAct(Short.parseShort(nextCmdSplit[0]), nextCmdSplit[1]);
+                        parseAct(nextCmdSplit[0], nextCmdSplit[1]);
                     else
                         hud.consoleOutput("Usage: act <id> <modifier>[|<id> <modifier>|...]");
-                } catch (ReflectiveOperationException roe) {
+                } catch (Throwable roe) {
                     throw new RuntimeException(roe);
-                } catch (NumberFormatException nfe) {
-                    hud.consoleOutput("act: Error parsing id '" + nextCmdSplit[0] + "'");
-                }
+                } 
             }
             return true;
         }
@@ -135,124 +128,129 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
         hud.sendAction(action, Tiles.getTileId(x + xo, y + yo, 0));
     }
 
-    private static void parseAct(final short id, final String target) throws ReflectiveOperationException {
+    private static void parseAct(final String strId, final String target) throws ReflectiveOperationException {
         final Optional<Target> targetOptE = Target.parseTargetSafe(target);
 
         if (targetOptE.isPresent()) { 
             Target targetE = targetOptE.get();
 
-            if (id == Short.MIN_VALUE) {
-                try {
-                    short default_id = defaultAction.getAction(targetE, DefaultAction.Action.DEFAULT, hud);
-                    // Only single recursion call;
-                    parseAct(default_id, target);
-                } catch (Throwable e) {
-                    hud.consoleOutput("default action error" + e);
+            if (strId.equals(DefaultAction.Action.DEFAULT.name().toLowerCase())) {
+                Optional<Short> default_id = defaultAction.getAction(targetE, DefaultAction.Action.DEFAULT, hud);
+                if (default_id.isPresent()) {
+                    act(default_id.get(), targetE, target);
+                } else {
+                    hud.consoleOutput("act: it doesn't have default action for target '" + target + "'");
                 }
-            } else if (id == Short.MAX_VALUE) {
-                try {
-                    short alt_id = defaultAction.getAction(targetE, DefaultAction.Action.ALT, hud);
-                    // Only single recursion call;
-                    parseAct(alt_id, target);
-                } catch (Throwable e) {
-                    hud.consoleOutput("default action error" + e);
+            } else if (strId.equals(DefaultAction.Action.ALT.name().toLowerCase())) {
+                Optional<Short> alt_id = defaultAction.getAction(targetE, DefaultAction.Action.ALT, hud);
+                if (alt_id.isPresent()) {
+                    act(alt_id.get(), targetE, target);
+                } else {
+                    hud.consoleOutput("act: it doesn't have alternative action for target '" + target + "'");
                 }
             } else {
-                final PlayerAction act = new PlayerAction(id, PlayerAction.ANYTHING, "", false);
-
-                if (targetOptE.isPresent()) { 
-                    try {
-                        switch (targetE) {
-                            case HOVER:
-                                hud.getWorld().sendHoveredAction(act);
-                                break;
-                            case BODY:
-                                hud.sendAction(act, Reflect.getBodyItem(hud.getPaperDollInventory()).getId());
-                                break;
-                            case TILE:
-                                hud.getWorld().sendLocalAction(act);
-                                break;
-                            case TILE_N:
-                                sendLocalAction(act, 0, -1);
-                                break;
-                            case TILE_W:
-                                sendLocalAction(act, -1, 0);
-                                break;
-                            case TILE_NW:
-                                sendLocalAction(act, -1, -1);
-                                break;
-                            case TILE_NE:
-                                sendLocalAction(act, 1, -1);
-                                break;
-                            case TILE_S:
-                                sendLocalAction(act, 0, 1);
-                                break;
-                            case TILE_E:
-                                sendLocalAction(act, 1, 0);
-                                break;
-                            case TILE_SE:
-                                sendLocalAction(act, 1, 1);
-                                break;
-                            case TILE_SW:
-                                sendLocalAction(act, -1, 1);
-                                break;
-                            case TOOL:
-                                InventoryMetaItem t = Reflect.getActiveToolItem(hud);
-                                if (t != null)
-                                    hud.sendAction(act, t.getId());
-                                else
-                                    hud.consoleOutput("act: tool modifier requires an active tool selected");
-                                break;
-                            case SELECTED:
-                                PickableUnit p = Reflect.getSelectedUnit(hud.getSelectBar());
-                                if (p != null)
-                                    hud.sendAction(act, p.getId());
-                                break;
-                            case AREA:
-                                sendAreaAction(act);
-                                break;
-                            case TOOLBELT:
-                                if (id >= 1 && id <= 10)
-                                    hud.setActiveTool(id - 1);
-                                else
-                                    hud.consoleOutput("act: Invalid toolbelt slot '" + id + "'");
-                                break;
-                            case TB:
-                                int slotT = Integer.parseInt(target.substring(3));
-                                if (slotT >= 1 && slotT <= 10 && hud.getToolBelt().getItemInSlot(slotT - 1) != null)
-                                    hud.sendAction(act, hud.getToolBelt().getItemInSlot(slotT - 1).getId());
-                                else
-                                    hud.consoleOutput("act: Invalid toolbelt slot '" + slotT + "'");
-                            case EQ:
-                                byte slotE = Byte.parseByte(target.substring(3));
-                                PaperDollSlot obj = Reflect.getFrameFromSlotnumber(hud.getPaperDollInventory(), slotE);
-                                if (obj == null) {
-                                    hud.consoleOutput("act: Invalid equipment slot " + slotE);
-                                } else if (obj.getEquippedItem() == null) {
-                                    hud.consoleOutput("act: No item in equipment slot " + slotE);
-                                } else {
-                                    hud.sendAction(act, obj.getEquippedItem().getId());
-                                }
-                            case NEARBY:
-                                float range = Float.parseFloat(target.substring(7));
-                                final float rangeSq = range * range;
-                                ServerConnectionListenerClass conn = hud.getWorld().getServerConnection().getServerConnectionListener();
-                                Collection<GroundItemCellRenderable> items = Reflect.getGroundItems(conn).values();
-                                Collection<CreatureCellRenderable> creatures = conn.getCreatures().values();
-                                Stream.concat(items.stream(), creatures.stream())
-                                        .filter(x -> x.getSquaredLengthFromPlayer() < rangeSq)
-                                        .mapToLong(CellRenderable::getId)
-                                        .forEach(tid -> hud.sendAction(act, tid));
-                            default:
-                                hud.consoleOutput("act: unexpected target '" + target + "'");
-                        } 
-                    } catch (ReflectiveOperationException e) {
-                        throw e;
-                    }
-                } else {
-                    hud.consoleOutput("act: Invalid target keyword '" + target + "'");
-                }
+                try {
+                    final short id = Short.parseShort(strId);
+                    act(id, targetE, target);
+                } catch (NumberFormatException nfe) {
+                    hud.consoleOutput("act: Error parsing id '" + strId + "'");
+                    return;
+                } 
             }
         }
+    }
+
+    private static void act(final short id, final Target targetE, final String targetStr) {
+        final PlayerAction act = new PlayerAction(id, PlayerAction.ANYTHING, "", false);
+
+        switch (targetE) {
+            case HOVER:
+                hud.getWorld().sendHoveredAction(act);
+                break;
+            case BODY:
+                // Original logic also unwrapped the fetched value
+                hud.sendAction(act, Reflect.getBodyItem(hud.getPaperDollInventory()).get().getId());
+                break;
+            case TILE:
+                hud.getWorld().sendLocalAction(act);
+                break;
+            case TILE_N:
+                sendLocalAction(act, 0, -1);
+                break;
+            case TILE_W:
+                sendLocalAction(act, -1, 0);
+                break;
+            case TILE_NW:
+                sendLocalAction(act, -1, -1);
+                break;
+            case TILE_NE:
+                sendLocalAction(act, 1, -1);
+                break;
+            case TILE_S:
+                sendLocalAction(act, 0, 1);
+                break;
+            case TILE_E:
+                sendLocalAction(act, 1, 0);
+                break;
+            case TILE_SE:
+                sendLocalAction(act, 1, 1);
+                break;
+            case TILE_SW:
+                sendLocalAction(act, -1, 1);
+                break;
+            case TOOL:
+                Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
+                if (t.isPresent())
+                    hud.sendAction(act, t.get().getId());
+                else
+                    hud.consoleOutput("act: tool modifier requires an active tool selected");
+                break;
+            case SELECTED:
+                Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
+                if (p.isPresent())
+                    hud.sendAction(act, p.get().getId());
+                break;
+            case AREA:
+                sendAreaAction(act);
+                break;
+            case TOOLBELT:
+                if (id >= 1 && id <= 10)
+                    hud.setActiveTool(id - 1);
+                else
+                    hud.consoleOutput("act: Invalid toolbelt slot '" + id + "'");
+                break;
+            case TB:
+                int slotT = Integer.parseInt(targetStr.substring(3));
+                if (slotT >= 1 && slotT <= 10 && hud.getToolBelt().getItemInSlot(slotT - 1) != null)
+                    hud.sendAction(act, hud.getToolBelt().getItemInSlot(slotT - 1).getId());
+                else
+                    hud.consoleOutput("act: Invalid toolbelt slot '" + slotT + "'");
+                break;
+            case EQ:
+                byte slotE = Byte.parseByte(targetStr.substring(3));
+                Optional<PaperDollSlot> obj = Reflect.getFrameFromSlotnumber(hud.getPaperDollInventory(), slotE);
+                if (!obj.isPresent()) {
+                    hud.consoleOutput("act: Invalid equipment slot " + slotE);
+                } else if (obj.get().getEquippedItem() == null) {
+                    hud.consoleOutput("act: No item in equipment slot " + slotE);
+                } else {
+                    hud.sendAction(act, obj.get().getEquippedItem().getId());
+                }
+                break;
+            case NEARBY:
+                float range = Float.parseFloat(targetStr.substring(7));
+                final float rangeSq = range * range;
+                ServerConnectionListenerClass conn = hud.getWorld().getServerConnection().getServerConnectionListener();
+                // Original logic also unwrapped the fetched value
+                Collection<GroundItemCellRenderable> items = Reflect.getGroundItems(conn).get().values();
+                Collection<CreatureCellRenderable> creatures = conn.getCreatures().values();
+                Stream.concat(items.stream(), creatures.stream())
+                        .filter(x -> x.getSquaredLengthFromPlayer() < rangeSq)
+                        .mapToLong(CellRenderable::getId)
+                        .forEach(tid -> hud.sendAction(act, tid));
+                break;
+            default:
+                hud.consoleOutput("act: Invalid target keyword '" + targetStr + "'");
+        } 
     }
 }
