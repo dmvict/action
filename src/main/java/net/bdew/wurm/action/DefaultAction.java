@@ -305,6 +305,8 @@ public class DefaultAction {
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSEDefaultProps, DEFAULT_OPTION_NAME, pats, action);
         } else if (target == Target.TILE_SW) {
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSWDefaultProps, DEFAULT_OPTION_NAME, pats, action);
+        } else if (target == Target.AREA) {
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.areaDefaultProps, DEFAULT_OPTION_NAME, pats, action);
         } else if (target == Target.ACTIVATED) {
             Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
             if (t.isPresent()) {
@@ -316,10 +318,23 @@ public class DefaultAction {
             if (p.isPresent()) {
                 act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.selectedDefaultProps, p.get().getHoverName(), pats, action);
             }
-        } else if (target == Target.AREA) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.areaDefaultProps, DEFAULT_OPTION_NAME, pats, action);
         } else if (target == Target.TOOLBELT) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.toolbeltDefaultProps, DEFAULT_OPTION_NAME, pats, action);
+            String toolbeltItemSelector = null;
+
+            PickableUnit obj = hud.getWorld().getCurrentHoveredObject();
+            if (obj != null) {
+                toolbeltItemSelector = obj.getHoverName();
+            } else {
+
+                Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
+                if (p.isPresent()) {
+                    toolbeltItemSelector = p.get().getHoverName();
+                } else {
+                    toolbeltItemSelector = DEFAULT_OPTION_NAME;
+                }
+            }
+        
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.toolbeltDefaultProps, toolbeltItemSelector, pats, action);
         } else if (target == Target.TB) {
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tbDefaultProps, Integer.toString(target.getId()), pats, action);
         } else if (target == Target.EQ) {
