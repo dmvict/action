@@ -26,6 +26,17 @@ public class DefaultAction {
 
         public Map<String, short[]> patterns = new HashMap<String, short[]>();
 
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder("Patterns {");
+            sb.append("startsWithList=").append(startsWithList.toString()).append('\'');
+            sb.append(", endsWithList=").append(endsWithList.toString());
+            sb.append(", containsList=").append(containsList.toString());
+            sb.append(", patterns=").append(patterns.toString());
+            sb.append('}');
+            return sb.toString(); 
+        }
+
         public short[] get(final String src) {
             for (String p: this.startsWithList) {
                 if (src.startsWith(p)) {
@@ -51,6 +62,7 @@ public class DefaultAction {
     static final String DEFAULT_OPTION_NAME = "default";
 
     public static short[] defaultEntry = {(short) 1, (short) 1};
+    public Map<String, short[]> activatedDefaultProps = new HashMap<String, short[]>();
     public Map<String, short[]> areaDefaultProps = new HashMap<String, short[]>();
     public Map<String, short[]> bodyDefaultProps = new HashMap<String, short[]>();
     public Map<String, short[]> eqDefaultProps = new HashMap<String, short[]>();
@@ -67,10 +79,36 @@ public class DefaultAction {
     public Map<String, short[]> tileSEDefaultProps = new HashMap<String, short[]>();
     public Map<String, short[]> tileSWDefaultProps = new HashMap<String, short[]>();
     public Map<String, short[]> tileWDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> toolDefaultProps = new HashMap<String, short[]>();
     public Map<String, short[]> toolbeltDefaultProps = new HashMap<String, short[]>();
 
     private static Map<String, Patterns> patterns = new HashMap<String, Patterns>();
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("DefaultAction {");
+        sb.append("activatedDefaultProps=").append(activatedDefaultProps.toString()).append('\'');
+        sb.append(", areaDefaultProps=").append(areaDefaultProps.toString());
+        sb.append(", bodyDefaultProps=").append(bodyDefaultProps.toString());
+        sb.append(", eqDefaultProps=").append(eqDefaultProps.toString());
+        sb.append(", hoverDefaultProps=").append(hoverDefaultProps.toString());
+        sb.append(", nearbyDefaultProps=").append(nearbyDefaultProps.toString());
+        sb.append(", selectedDefaultProps=").append(selectedDefaultProps.toString());
+        sb.append(", tbDefaultProps=").append(tbDefaultProps.toString());
+        sb.append(", tileDefaultProps=").append(tileDefaultProps.toString());
+        sb.append(", tileEDefaultProps=").append(tileEDefaultProps.toString());
+        sb.append(", tileNDefaultProps=").append(tileNDefaultProps.toString());
+        sb.append(", tileNEDefaultProps=").append(tileNEDefaultProps.toString());
+        sb.append(", tileNWDefaultProps=").append(tileNWDefaultProps.toString());
+        sb.append(", tileSDefaultProps=").append(tileSDefaultProps.toString());
+        sb.append(", tileSEDefaultProps=").append(tileSEDefaultProps.toString());
+        sb.append(", tileSWDefaultProps=").append(tileSWDefaultProps.toString());
+        sb.append(", tileWDefaultProps=").append(tileWDefaultProps.toString());
+        sb.append(", toolbeltDefaultProps=").append(toolbeltDefaultProps.toString());
+        sb.append(", patterns=");
+        patterns.keySet().stream().forEach(key -> sb.append(", " + key + "=").append(patterns.get(key)));
+        sb.append('}');
+        return sb.toString(); 
+    }
 
     public static enum Action {
         DEFAULT(0),
@@ -125,7 +163,7 @@ public class DefaultAction {
         // TOOLBELT
 
         int counter = 0;
-        counter = defaultAction.fillProps(props, keys, Target.ACTIVATED.name().toLowerCase(), counter, defaultAction.toolDefaultProps);
+        counter = defaultAction.fillProps(props, keys, Target.ACTIVATED.name().toLowerCase(), counter, defaultAction.activatedDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.AREA.name().toLowerCase(), counter, defaultAction.areaDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.BODY.name().toLowerCase(), counter, defaultAction.bodyDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.EQ.name().toLowerCase(), counter, defaultAction.eqDefaultProps);
@@ -271,7 +309,7 @@ public class DefaultAction {
             Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
             if (t.isPresent()) {
                 InventoryMetaItem item = t.get();
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.toolDefaultProps, item.getBaseName(), pats, action);
+                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.activatedDefaultProps, item.getBaseName(), pats, action);
             }
         } else if (target == Target.SELECTED) {
             Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
