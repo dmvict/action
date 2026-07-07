@@ -1,17 +1,24 @@
 package net.bdew.wurm.action;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.StringJoiner;
+import java.util.TreeSet;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.PickableUnit;
@@ -19,44 +26,6 @@ import com.wurmonline.client.renderer.gui.HeadsUpDisplay;
 
 @SuppressWarnings("unchecked")
 public class DefaultAction {
-    private static class Patterns {
-        public List<String> startsWithList = new ArrayList<>();
-        public List<String> endsWithList = new ArrayList<>();
-        public List<String> containsList = new ArrayList<>();
-
-        public Map<String, short[]> patterns = new HashMap<String, short[]>();
-
-        @Override
-        public String toString() {
-            StringBuilder sb = new StringBuilder("Patterns {");
-            sb.append("startsWithList=").append(startsWithList.toString()).append('\'');
-            sb.append(", endsWithList=").append(endsWithList.toString());
-            sb.append(", containsList=").append(containsList.toString());
-            sb.append(", patterns=").append(patterns.toString());
-            sb.append('}');
-            return sb.toString(); 
-        }
-
-        public short[] get(final String src) {
-            for (String p: this.startsWithList) {
-                if (src.startsWith(p)) {
-                    return this.patterns.get(p);
-                }
-            }
-            for (String p: this.endsWithList) {
-                if (src.endsWith(p)) {
-                    return this.patterns.get(p);
-                }
-            }
-            for (String p: this.containsList) {
-                if (src.contains(p)) {
-                    return this.patterns.get(p);
-                }
-            }
-            return null;
-        }
-    }
-
     // TODO: probably there are constants that could be used instead of literals
     static final Path CONFIG_PATH = Paths.get("mods/action", "act_default.properties");
     static final String DEFAULT_OPTION_NAME = "default";
@@ -82,33 +51,6 @@ public class DefaultAction {
     public Map<String, short[]> toolbeltDefaultProps = new HashMap<String, short[]>();
 
     private static Map<String, Patterns> patterns = new HashMap<String, Patterns>();
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder("DefaultAction {");
-        sb.append("activatedDefaultProps=").append(activatedDefaultProps.toString()).append('\'');
-        sb.append(", areaDefaultProps=").append(areaDefaultProps.toString());
-        sb.append(", bodyDefaultProps=").append(bodyDefaultProps.toString());
-        sb.append(", eqDefaultProps=").append(eqDefaultProps.toString());
-        sb.append(", hoverDefaultProps=").append(hoverDefaultProps.toString());
-        sb.append(", nearbyDefaultProps=").append(nearbyDefaultProps.toString());
-        sb.append(", selectedDefaultProps=").append(selectedDefaultProps.toString());
-        sb.append(", tbDefaultProps=").append(tbDefaultProps.toString());
-        sb.append(", tileDefaultProps=").append(tileDefaultProps.toString());
-        sb.append(", tileEDefaultProps=").append(tileEDefaultProps.toString());
-        sb.append(", tileNDefaultProps=").append(tileNDefaultProps.toString());
-        sb.append(", tileNEDefaultProps=").append(tileNEDefaultProps.toString());
-        sb.append(", tileNWDefaultProps=").append(tileNWDefaultProps.toString());
-        sb.append(", tileSDefaultProps=").append(tileSDefaultProps.toString());
-        sb.append(", tileSEDefaultProps=").append(tileSEDefaultProps.toString());
-        sb.append(", tileSWDefaultProps=").append(tileSWDefaultProps.toString());
-        sb.append(", tileWDefaultProps=").append(tileWDefaultProps.toString());
-        sb.append(", toolbeltDefaultProps=").append(toolbeltDefaultProps.toString());
-        sb.append(", patterns=");
-        patterns.keySet().stream().forEach(key -> sb.append(", " + key + "=").append(patterns.get(key)));
-        sb.append('}');
-        return sb.toString(); 
-    }
 
     public static enum Action {
         DEFAULT(0),
@@ -279,7 +221,18 @@ public class DefaultAction {
         // and it is more safe to use this statements
         if (target == Target.HOVER) {
             PickableUnit obj = hud.getWorld().getCurrentHoveredObject();
-            String obj_name = obj != null ? obj.getHoverName() : DEFAULT_OPTION_NAME;
+            String obj_name = null; 
+            if (obj == null) {
+                Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
+                if (t.isPresent()) {
+                    InventoryMetaItem item = t.get();
+                    obj_name = item.getBaseName();
+                } else {
+                    obj_name = DEFAULT_OPTION_NAME;
+                }
+            } else {
+                obj_name = obj.getHoverName();
+            }
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, obj_name, pats, action);
         } else if (target == Target.BODY) {
             Optional<InventoryMetaItem> itemOpt = Reflect.getBodyItem(hud.getPaperDollInventory());
@@ -373,5 +326,141 @@ public class DefaultAction {
             act_id = act_ids[action];
         }
         return act_id;
+    }
+
+    /* utilitary */
+
+    private static class Patterns {
+        public List<String> startsWithList = new ArrayList<>();
+        public List<String> endsWithList = new ArrayList<>();
+        public List<String> containsList = new ArrayList<>();
+
+        public Map<String, short[]> patterns = new HashMap<String, short[]>();
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder("Patterns {");
+            sb.append("startsWithList=").append(startsWithList.toString()).append('\'');
+            sb.append(", endsWithList=").append(endsWithList.toString());
+            sb.append(", containsList=").append(containsList.toString());
+            sb.append(", patterns=").append(patterns.toString());
+            sb.append('}');
+            return sb.toString(); 
+        }
+
+        public short[] get(final String src) {
+            for (String p: this.startsWithList) {
+                if (src.startsWith(p)) {
+                    return this.patterns.get(p);
+                }
+            }
+            for (String p: this.endsWithList) {
+                if (src.endsWith(p)) {
+                    return this.patterns.get(p);
+                }
+            }
+            for (String p: this.containsList) {
+                if (src.contains(p)) {
+                    return this.patterns.get(p);
+                }
+            }
+            return null;
+        }
+    }
+
+    private static String shortArrayToString(short[] arr) {
+        StringJoiner joiner = new StringJoiner("|");
+        for (short v : arr) {
+            joiner.add(String.valueOf(v));
+        }
+        return joiner.toString();
+    }
+
+    private class SortedProperties extends Properties {
+
+        @Override
+        public Set<Object> keySet() {
+            return new TreeSet<>(super.keySet());
+        }
+
+        @Override
+        public Set<Map.Entry<Object, Object>> entrySet() {
+            Set<Map.Entry<Object, Object>> sortedSet = new TreeSet<>(
+                Comparator.comparing(e -> String.valueOf(e.getKey()))
+            );
+            sortedSet.addAll(super.entrySet());
+            return sortedSet;
+        }
+
+        @Override
+        public synchronized Enumeration<Object> keys() {
+            return Collections.enumeration(new TreeSet<>(super.keySet()));
+        }
+    }
+
+    private SortedProperties toProperties() {
+        SortedProperties props = new SortedProperties();
+
+        for(Target k: Target.values()) {
+            try {
+                String keyName = k.name().toLowerCase();
+                String[] prefixParts = keyName.split("_");
+                if (prefixParts.length == 2) {
+                    prefixParts[1] = prefixParts[1].toUpperCase();
+                }
+                String prefix = String.join("", prefixParts);
+                Field field = this.getClass().getDeclaredField(prefix + "DefaultProps");
+                field.setAccessible(true);
+                HashMap<String, short[]> fieldValue = (HashMap<String, short[]>) field.get(this);
+                if (fieldValue != null) {
+                    for (Map.Entry<String, short[]> entry : fieldValue.entrySet()) {
+                        props.setProperty(prefix + "." + entry.getKey(), shortArrayToString(entry.getValue()));
+                    }
+                }
+                
+                Patterns currentPatterns = patterns.get(keyName);
+                if (currentPatterns != null) {
+                    currentPatterns.startsWithList.stream().forEach(p -> props.setProperty(prefix + "." + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
+                    currentPatterns.endsWithList.stream().forEach(p -> props.setProperty(prefix + ".*" + p, shortArrayToString(currentPatterns.patterns.get(p))));
+                    currentPatterns.containsList.stream().forEach(p -> props.setProperty(prefix + ".*" + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
+                }
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException("Could not access field:", e);
+            }            
+        }
+
+        return props;
+    }
+
+    public void saveProperties(final String path) throws IOException {
+        FileOutputStream out = new FileOutputStream(path);
+        this.toProperties().store(out, "Default config updated at:");
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("DefaultAction {");
+        sb.append("activatedDefaultProps=").append(activatedDefaultProps.toString()).append('\'');
+        sb.append(", areaDefaultProps=").append(areaDefaultProps.toString());
+        sb.append(", bodyDefaultProps=").append(bodyDefaultProps.toString());
+        sb.append(", eqDefaultProps=").append(eqDefaultProps.toString());
+        sb.append(", hoverDefaultProps=").append(hoverDefaultProps.toString());
+        sb.append(", nearbyDefaultProps=").append(nearbyDefaultProps.toString());
+        sb.append(", selectedDefaultProps=").append(selectedDefaultProps.toString());
+        sb.append(", tbDefaultProps=").append(tbDefaultProps.toString());
+        sb.append(", tileDefaultProps=").append(tileDefaultProps.toString());
+        sb.append(", tileEDefaultProps=").append(tileEDefaultProps.toString());
+        sb.append(", tileNDefaultProps=").append(tileNDefaultProps.toString());
+        sb.append(", tileNEDefaultProps=").append(tileNEDefaultProps.toString());
+        sb.append(", tileNWDefaultProps=").append(tileNWDefaultProps.toString());
+        sb.append(", tileSDefaultProps=").append(tileSDefaultProps.toString());
+        sb.append(", tileSEDefaultProps=").append(tileSEDefaultProps.toString());
+        sb.append(", tileSWDefaultProps=").append(tileSWDefaultProps.toString());
+        sb.append(", tileWDefaultProps=").append(tileWDefaultProps.toString());
+        sb.append(", toolbeltDefaultProps=").append(toolbeltDefaultProps.toString());
+        sb.append(", patterns=");
+        patterns.keySet().stream().forEach(key -> sb.append(", " + key + "=").append(patterns.get(key)));
+        sb.append('}');
+        return sb.toString(); 
     }
 }

@@ -1,5 +1,6 @@
 package net.bdew.wurm.action;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
@@ -52,6 +53,19 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
                 }
             }
             hud.consoleOutput("Usage: act_show {on|off}");
+            return true;
+        } else if (cmd.equals("act_default")) {
+            if (data.length == 2) {
+                try {
+                    defaultAction.saveProperties(DefaultAction.CONFIG_PATH.toString());
+                    hud.consoleOutput("Saved properties to file " + DefaultAction.CONFIG_PATH.toString());
+                } catch (IOException e) {
+                    hud.consoleOutput("act: cannot write updated properties"); 
+                    hud.consoleOutput(e.toString());
+                }
+            } else {
+                hud.consoleOutput("Usage: act_default save");
+            }
             return true;
         } else if (cmd.equals("act")) {
             // Stitch it back together with spaces, without the leading 'act' and get a list of strings split by |
