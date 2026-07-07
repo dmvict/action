@@ -105,6 +105,7 @@ public class DefaultAction {
 
         // order of adding of props is alphabetical since the keys are sorted alphabetically
         // items handled related to the Target enum
+        // ACTIVATED 
         // AREA
         // BODY
         // EQ
@@ -121,10 +122,10 @@ public class DefaultAction {
         // TILE_SE
         // TILE_SW
         // TILE_W
-        // TOOL
         // TOOLBELT
 
         int counter = 0;
+        counter = defaultAction.fillProps(props, keys, Target.ACTIVATED.name().toLowerCase(), counter, defaultAction.toolDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.AREA.name().toLowerCase(), counter, defaultAction.areaDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.BODY.name().toLowerCase(), counter, defaultAction.bodyDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.EQ.name().toLowerCase(), counter, defaultAction.eqDefaultProps);
@@ -141,7 +142,6 @@ public class DefaultAction {
         counter = defaultAction.fillProps(props, keys, Target.TILE_SE.name().toLowerCase(), counter, defaultAction.tileSEDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.TILE_SW.name().toLowerCase(), counter, defaultAction.tileSWDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.TILE_W.name().toLowerCase(), counter, defaultAction.tileWDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.ACTIVATED.name().toLowerCase(), counter, defaultAction.toolDefaultProps);
         defaultAction.fillProps(props, keys, Target.TOOLBELT.name().toLowerCase(), counter, defaultAction.toolbeltDefaultProps);
 
         //
@@ -241,13 +241,8 @@ public class DefaultAction {
         // and it is more safe to use this statements
         if (target == Target.HOVER) {
             PickableUnit obj = hud.getWorld().getCurrentHoveredObject();
-            if (obj != null) {
-                String obj_name = obj.getHoverName();
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, obj_name, pats, action);
-            } else {
-                // logic for hovered objects inside windows
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-            }
+            String obj_name = obj != null ? obj.getHoverName() : DEFAULT_OPTION_NAME;
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, obj_name, pats, action);
         } else if (target == Target.BODY) {
             Optional<InventoryMetaItem> itemOpt = Reflect.getBodyItem(hud.getPaperDollInventory());
             if (itemOpt.isPresent()) {
@@ -312,6 +307,13 @@ public class DefaultAction {
                 if (entry != null) {
                     container.put(item_name, entry);
                     act_id = entry[action];
+                } 
+            }
+            // double check
+            if (act_id == defaultEntry[action]) {
+                short[] default_ids = container.get(DEFAULT_OPTION_NAME);
+                if (default_ids != null) {
+                    act_id = default_ids[action];
                 }
             }
         } else {
