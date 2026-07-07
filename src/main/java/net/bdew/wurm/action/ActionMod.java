@@ -57,15 +57,21 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
         } else if (cmd.equals("act_default")) {
             if (data.length == 2) {
                 try {
-                    defaultAction.saveProperties(DefaultAction.CONFIG_PATH.toString());
-                    hud.consoleOutput("Saved properties to file " + DefaultAction.CONFIG_PATH.toString());
-                } catch (IOException e) {
-                    hud.consoleOutput("act: cannot write updated properties"); 
+                    if (data[1].equals("save")) {
+                        defaultAction.saveProperties(DefaultAction.CONFIG_PATH.toString());
+                        hud.consoleOutput("Saved default actions to file " + DefaultAction.CONFIG_PATH.toString());
+                        return true;
+                    } else if (data[1].equals("load")) {
+                        DefaultAction.loadDefaultActios(defaultAction);
+                        hud.consoleOutput("Loaded default actions from file " + DefaultAction.CONFIG_PATH.toString());
+                        return true;
+                    } 
+                } catch (Throwable e) {
+                    hud.consoleOutput("act: cannot handle default properties"); 
                     hud.consoleOutput(e.toString());
                 }
-            } else {
-                hud.consoleOutput("Usage: act_default save");
             }
+            hud.consoleOutput("Usage: act_default {load|save}");
             return true;
         } else if (cmd.equals("act")) {
             // Stitch it back together with spaces, without the leading 'act' and get a list of strings split by |

@@ -69,6 +69,10 @@ public class DefaultAction {
 
     public static DefaultAction setup() throws Throwable {
         DefaultAction defaultAction = new DefaultAction();
+        return loadDefaultActios(defaultAction);
+    }
+
+    public static DefaultAction loadDefaultActios(DefaultAction defaultAction) throws Throwable {
 
         // Get config for default actions and parse options
         Properties props = new Properties();
@@ -278,7 +282,6 @@ public class DefaultAction {
             if (obj != null) {
                 toolbeltItemSelector = obj.getHoverName();
             } else {
-
                 Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
                 if (p.isPresent()) {
                     toolbeltItemSelector = p.get().getHoverName();
