@@ -14,24 +14,51 @@ public enum Target {
     TILE_E,
     TILE_SE,
     TILE_SW,
-    TOOL,
+    ACTIVATED,
     SELECTED,
     AREA,
     TOOLBELT,
-    TB,
-    EQ,
-    NEARBY;
+    TB(1),
+    EQ(1),
+    NEARBY(1);
+
+    private int id;
+
+    private Target() {
+        this.id = Integer.MIN_VALUE; 
+    }
+
+    private Target(final int id) {
+        this.id = id; 
+    }
+
+    private void setId(final int id) {
+        this.id = id; 
+    }
+
+    public int getId() {
+        return this.id;
+    }
 
     public static Optional<Target> parseTargetSafe(String input) {
         if (input == null) return Optional.empty();
         String src = input.trim();;
         try {
             if (src.startsWith("@tb")) {
-                return Optional.of(TB);
+                int slotT = Integer.parseInt(input.substring(3));
+                Target tb = TB;
+                tb.setId(slotT);
+                return Optional.of(tb);
             } else if (src.startsWith("@eq")) {
-                return Optional.of(EQ);
+                int slotE = Integer.parseInt(input.substring(3));
+                Target eq = EQ;
+                eq.setId(slotE);
+                return Optional.of(eq);
             } else if (src.startsWith("@nearby")) {
-                return Optional.of(NEARBY);
+                int range = Integer.parseInt(input.substring(7));
+                Target nearby = NEARBY;
+                nearby.setId(range);
+                return Optional.of(nearby);
             } else {
                 return Optional.of(Target.valueOf(src.toUpperCase()));
             }

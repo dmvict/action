@@ -141,7 +141,7 @@ public class DefaultAction {
         counter = defaultAction.fillProps(props, keys, Target.TILE_SE.name().toLowerCase(), counter, defaultAction.tileSEDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.TILE_SW.name().toLowerCase(), counter, defaultAction.tileSWDefaultProps);
         counter = defaultAction.fillProps(props, keys, Target.TILE_W.name().toLowerCase(), counter, defaultAction.tileWDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TOOL.name().toLowerCase(), counter, defaultAction.toolDefaultProps);
+        counter = defaultAction.fillProps(props, keys, Target.ACTIVATED.name().toLowerCase(), counter, defaultAction.toolDefaultProps);
         defaultAction.fillProps(props, keys, Target.TOOLBELT.name().toLowerCase(), counter, defaultAction.toolbeltDefaultProps);
 
         //
@@ -245,11 +245,11 @@ public class DefaultAction {
                 String obj_name = obj.getHoverName();
                 act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, obj_name, pats, action);
             } else {
+                // logic for hovered objects inside windows
                 act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, DEFAULT_OPTION_NAME, pats, action);
             }
         } else if (target == Target.BODY) {
             Optional<InventoryMetaItem> itemOpt = Reflect.getBodyItem(hud.getPaperDollInventory());
-            // TODO: check properly the logic behind returned string
             if (itemOpt.isPresent()) {
                 InventoryMetaItem item = itemOpt.get();
                 act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.bodyDefaultProps, item.getBaseName(), pats, action);
@@ -272,7 +272,7 @@ public class DefaultAction {
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSEDefaultProps, DEFAULT_OPTION_NAME, pats, action);
         } else if (target == Target.TILE_SW) {
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSWDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TOOL) {
+        } else if (target == Target.ACTIVATED) {
             Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
             if (t.isPresent()) {
                 InventoryMetaItem item = t.get();
@@ -288,11 +288,11 @@ public class DefaultAction {
         } else if (target == Target.TOOLBELT) {
             act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.toolbeltDefaultProps, DEFAULT_OPTION_NAME, pats, action);
         } else if (target == Target.TB) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tbDefaultProps, DEFAULT_OPTION_NAME, pats, action);
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tbDefaultProps, Integer.toString(target.getId()), pats, action);
         } else if (target == Target.EQ) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.eqDefaultProps, DEFAULT_OPTION_NAME, pats, action);
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.eqDefaultProps, Integer.toString(target.getId()), pats, action);
         } else if (target == Target.NEARBY) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.nearbyDefaultProps, DEFAULT_OPTION_NAME, pats, action);
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.nearbyDefaultProps, Integer.toString(target.getId()), pats, action);
         }
 
         //

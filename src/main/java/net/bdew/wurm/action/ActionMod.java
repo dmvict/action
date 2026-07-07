@@ -198,7 +198,7 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
             case TILE_SW:
                 sendLocalAction(act, -1, 1);
                 break;
-            case TOOL:
+            case ACTIVATED:
                 Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
                 if (t.isPresent())
                     hud.sendAction(act, t.get().getId());
@@ -220,14 +220,14 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
                     hud.consoleOutput("act: Invalid toolbelt slot '" + id + "'");
                 break;
             case TB:
-                int slotT = Integer.parseInt(targetStr.substring(3));
+                int slotT = targetE.getId();
                 if (slotT >= 1 && slotT <= 10 && hud.getToolBelt().getItemInSlot(slotT - 1) != null)
                     hud.sendAction(act, hud.getToolBelt().getItemInSlot(slotT - 1).getId());
                 else
                     hud.consoleOutput("act: Invalid toolbelt slot '" + slotT + "'");
                 break;
             case EQ:
-                byte slotE = Byte.parseByte(targetStr.substring(3));
+                byte slotE = (byte) targetE.getId();
                 Optional<PaperDollSlot> obj = Reflect.getFrameFromSlotnumber(hud.getPaperDollInventory(), slotE);
                 if (!obj.isPresent()) {
                     hud.consoleOutput("act: Invalid equipment slot " + slotE);
@@ -238,7 +238,7 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
                 }
                 break;
             case NEARBY:
-                float range = Float.parseFloat(targetStr.substring(7));
+                float range = (float) targetE.getId();
                 final float rangeSq = range * range;
                 ServerConnectionListenerClass conn = hud.getWorld().getServerConnection().getServerConnectionListener();
                 // Original logic also unwrapped the fetched value
