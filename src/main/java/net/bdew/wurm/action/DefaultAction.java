@@ -3,7 +3,6 @@ package net.bdew.wurm.action;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -22,7 +21,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.TreeSet;
 
 import com.wurmonline.client.game.inventory.InventoryMetaItem;
 import com.wurmonline.client.renderer.PickableUnit;
@@ -36,8 +34,7 @@ public class DefaultAction {
 
     public static short[] defaultEntry = {(short) 1, (short) 1};
     public Map<Target, Map<String, short[]>> defaultProps = new HashMap<>();
-
-    private static Map<String, Patterns> patterns = new HashMap<String, Patterns>();
+    private static Map<String, Patterns> patterns = new HashMap<>();
 
     public static enum Action {
         DEFAULT(0),
@@ -83,8 +80,8 @@ public class DefaultAction {
 
         for (String key: keys) {
 
-            Optional<String[]> actionSplitsE = DefaultAction.getPropertyName(key);
-            if (!actionSplitsE.isPresent()) {
+            Optional<String[]> actionPartsOpt = DefaultAction.getPropertyParts(key);
+            if (!actionPartsOpt.isPresent()) {
                 System.out.println("Failed to read section property. Format is [section_name].[section_value]");
                 System.out.println("Skip and continue");
                 continue;
@@ -93,15 +90,15 @@ public class DefaultAction {
             Optional<short[]> actionsE = DefaultAction.getActions(props.getProperty(key), (short) 1);
 
             if (actionsE.isPresent()) {
-                Optional<Target> targetSectionNameE = Target.parseTargetSafe(actionSplitsE.get()[0].trim());
-                if (!targetSectionNameE.isPresent()) {
-                    System.out.println("Invalid section name: " + actionSplitsE.get()[0]);
+                Optional<Target> targetSectionNameOpt = Target.parseTargetSafe(actionPartsOpt.get()[0].trim());
+                if (!targetSectionNameOpt.isPresent()) {
+                    System.out.println("Invalid section name: " + actionPartsOpt.get()[0]);
                     System.out.println("Skip and continue");
                     continue;
                 }
-                Target targetSection = targetSectionNameE.get();
+                Target targetSection = targetSectionNameOpt.get();
                 String targetSectionName = targetSection.name().toLowerCase();
-                String defaultActionName = actionSplitsE.get()[1].trim();
+                String defaultActionName = actionPartsOpt.get()[1].trim();
                 short[] actions = actionsE.get();
 
                 boolean startsWithAsterisk = defaultActionName.startsWith("*");
@@ -115,15 +112,14 @@ public class DefaultAction {
                     }
                     if (startsWithAsterisk && endsWithAsterisk) {
                         patternName = defaultActionName.substring(1, defaultActionName.length() - 1);
-                        sectionPatterns.containsList.add(patternName);
+                        sectionPatterns.add(new Pattern(patternName, Cmp.CONTAINS), actions);
                     } else if (startsWithAsterisk) {
                         patternName = defaultActionName.substring(1);
-                        sectionPatterns.endsWithList.add(patternName);
+                        sectionPatterns.add(new Pattern(patternName, Cmp.ENDS), actions);
                     } else {
                         patternName = defaultActionName.substring(0, defaultActionName.length() - 1);
-                        sectionPatterns.startsWithList.add(patternName);
+                        sectionPatterns.add(new Pattern(patternName, Cmp.STARTS), actions);
                     }
-                    sectionPatterns.patterns.put(patternName, actions);
                 } else {
                     Map<String, short[]> dst = this.defaultProps.get(targetSection);
                     if (dst == null) {
@@ -136,7 +132,7 @@ public class DefaultAction {
         }
     }
 
-    private static Optional<String[]> getPropertyName(final String key) {
+    private static Optional<String[]> getPropertyParts(final String key) {
         String[] keyParts = key.split("\\.", 2);
         if (keyParts.length == 1) {
             System.out.println("Failed to read section property. Format is [section_name].[section_value]");
@@ -259,38 +255,74 @@ public class DefaultAction {
 
     /* utilitary */
 
-    private static class Patterns {
-        public List<String> startsWithList = new ArrayList<>();
-        public List<String> endsWithList = new ArrayList<>();
-        public List<String> containsList = new ArrayList<>();
+    private static enum Cmp {
+        STARTS,
+        CONTAINS,
+        ENDS;
+    }
 
-        public Map<String, short[]> patterns = new HashMap<String, short[]>();
+    private static class Pattern {
+        public String value;
+        public Cmp cmp;
+
+        Pattern(final String value, final Cmp cmp) {
+            this.value = value;
+            this.cmp = cmp;
+        }
+
+        public boolean matches(final String src) {
+            if (this.cmp == Cmp.STARTS) {
+                return src.startsWith(this.value);
+            } else if (this.cmp == Cmp.ENDS) {
+                return src.endsWith(this.value);
+            } else if (this.cmp == Cmp.CONTAINS) {
+                return src.contains(this.value);
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public String toString() {
+            if (this.cmp == Cmp.STARTS) {
+                return this.value + "*";
+            } else if (this.cmp == Cmp.ENDS) {
+                return "*" + this.value;
+            } else if (this.cmp == Cmp.CONTAINS) {
+                return "*" + this.value + "*";
+            } else {
+                return "";
+            }
+        }
+    }
+
+    private static class Patterns {
+
+        public List<Pattern> patternsList = new ArrayList<>();
+        public Map<Pattern, short[]> patternsMap = new HashMap<>();
+
+        public void add(final Pattern pattern, final short[] value) {
+            this.patternsList.add(pattern);
+            this.patternsMap.put(pattern, value);
+        }
 
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder("Patterns {");
-            sb.append("startsWithList=").append(startsWithList.toString()).append('\'');
-            sb.append(", endsWithList=").append(endsWithList.toString());
-            sb.append(", containsList=").append(containsList.toString());
-            sb.append(", patterns=").append(patterns.toString());
+            sb.append("patternsList=[");
+            for (Pattern p: patternsList) {
+                sb.append(p.cmp.name().toLowerCase() + "::" + p.value);
+            }
+            sb.append("]");
+            sb.append(", patternsMap=").append(patternsMap.toString());
             sb.append('}');
             return sb.toString(); 
         }
 
         public short[] get(final String src) {
-            for (String p: this.startsWithList) {
-                if (src.startsWith(p)) {
-                    return this.patterns.get(p);
-                }
-            }
-            for (String p: this.endsWithList) {
-                if (src.endsWith(p)) {
-                    return this.patterns.get(p);
-                }
-            }
-            for (String p: this.containsList) {
-                if (src.contains(p)) {
-                    return this.patterns.get(p);
+            for (Pattern p: patternsList) {
+                if (p.matches(src)) {
+                    return patternsMap.get(p);
                 }
             }
             return null;
@@ -366,9 +398,9 @@ public class DefaultAction {
             
             Patterns currentPatterns = patterns.get(keyName);
             if (currentPatterns != null) {
-                currentPatterns.startsWithList.stream().forEach(p -> props.setProperty(prefix + "." + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
-                currentPatterns.endsWithList.stream().forEach(p -> props.setProperty(prefix + ".*" + p, shortArrayToString(currentPatterns.patterns.get(p))));
-                currentPatterns.containsList.stream().forEach(p -> props.setProperty(prefix + ".*" + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
+                currentPatterns.patternsList.stream().forEach(p -> 
+                    props.setProperty(prefix + "." + p.toString(), shortArrayToString(currentPatterns.patternsMap.get(p)))
+                );
             }
         }
 
