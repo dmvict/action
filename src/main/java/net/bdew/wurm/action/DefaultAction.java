@@ -98,35 +98,24 @@ public class DefaultAction {
                 }
                 Target targetSection = targetSectionNameOpt.get();
                 String targetSectionName = targetSection.name().toLowerCase();
-                String defaultActionName = actionPartsOpt.get()[1].trim();
+                String defaultActionKey = actionPartsOpt.get()[1].trim();
                 short[] actions = actionsE.get();
 
-                boolean startsWithAsterisk = defaultActionName.startsWith("*");
-                boolean endsWithAsterisk = defaultActionName.endsWith("*");
-                if (startsWithAsterisk || endsWithAsterisk) {
+                if (defaultActionKey.contains("*")) {
                     Patterns sectionPatterns = patterns.get(targetSectionName);
-                    String patternName = null;
                     if (sectionPatterns == null) {
                         sectionPatterns = new Patterns();
                         patterns.put(targetSectionName, sectionPatterns);
                     }
-                    if (startsWithAsterisk && endsWithAsterisk) {
-                        patternName = defaultActionName.substring(1, defaultActionName.length() - 1);
-                        sectionPatterns.add(new Pattern(patternName, Cmp.CONTAINS), actions);
-                    } else if (startsWithAsterisk) {
-                        patternName = defaultActionName.substring(1);
-                        sectionPatterns.add(new Pattern(patternName, Cmp.ENDS), actions);
-                    } else {
-                        patternName = defaultActionName.substring(0, defaultActionName.length() - 1);
-                        sectionPatterns.add(new Pattern(patternName, Cmp.STARTS), actions);
-                    }
+                    sectionPatterns.add(new Pattern(defaultActionKey), actions);
+
                 } else {
                     Map<String, short[]> dst = this.defaultProps.get(targetSection);
                     if (dst == null) {
                         dst = new LinkedHashMap<>();
                         this.defaultProps.put(targetSection, dst);
                     }
-                    dst.put(defaultActionName, actions);
+                    dst.put(defaultActionKey, actions);
                 }
             }
         }
@@ -261,14 +250,25 @@ public class DefaultAction {
         ENDS;
     }
 
-    private static class Pattern {
+    private static class PatternEntry {
         public String value;
         public Cmp cmp;
 
-        Pattern(final String value, final Cmp cmp) {
-            this.value = value;
-            this.cmp = cmp;
+        PatternEntry(final String pattern) {
+            boolean startsWithAsterisk = pattern.startsWith("*");
+            boolean endsWithAsterisk = pattern.endsWith("*");
+            if (startsWithAsterisk && endsWithAsterisk) {
+                this.value = pattern.substring(1, pattern.length() - 1);
+                this.cmp = Cmp.CONTAINS;
+            } else if (startsWithAsterisk) {
+                this.value = pattern.substring(1);
+                this.cmp = Cmp.ENDS;
+            } else {
+                this.value = pattern.substring(0, pattern.length() - 1);
+                this.cmp = Cmp.STARTS;
+            }
         }
+
 
         public boolean matches(final String src) {
             if (this.cmp == Cmp.STARTS) {
@@ -296,6 +296,39 @@ public class DefaultAction {
         }
     }
 
+    private static class Pattern {
+        public PatternEntry firstEntry;
+        public Optional<PatternEntry> secondEntry;
+
+        Pattern(final String pattern) {
+            String[] patternSplits = pattern.split("&&");
+            if (patternSplits.length == 2) {
+                this.firstEntry = new PatternEntry(patternSplits[0]);
+                this.secondEntry = Optional.of(new PatternEntry(patternSplits[1]));
+            } else {
+                this.firstEntry = new PatternEntry(patternSplits[0]);
+                this.secondEntry = Optional.empty();
+            }
+        }
+
+        public boolean matches(final String src) {
+            boolean matches = firstEntry.matches(src);
+            if ( matches && this.secondEntry.isPresent()) {
+                matches = secondEntry.get().matches(src);
+            } 
+            return matches;
+        }
+
+        @Override
+        public String toString() {
+            if (this.secondEntry.isPresent()) {
+                return this.firstEntry.toString() + "&&" + this.secondEntry.get().toString();
+            } else {
+                return this.firstEntry.toString();
+            } 
+        }
+    }
+
     private static class Patterns {
 
         public List<Pattern> patternsList = new ArrayList<>();
@@ -311,7 +344,8 @@ public class DefaultAction {
             StringBuilder sb = new StringBuilder("Patterns {");
             sb.append("patternsList=[");
             for (Pattern p: patternsList) {
-                sb.append(p.cmp.name().toLowerCase() + "::" + p.value);
+                sb.append(p.firstEntry.toString() + 
+                (p.secondEntry.isPresent() ? "&&" + p.secondEntry.get().toString() : ""));
             }
             sb.append("]");
             sb.append(", patternsMap=").append(patternsMap.toString());
