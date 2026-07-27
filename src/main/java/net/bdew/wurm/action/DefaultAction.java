@@ -9,10 +9,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -125,7 +127,7 @@ public class DefaultAction {
                 } else {
                     Map<String, short[]> dst = this.defaultProps.get(targetSection);
                     if (dst == null) {
-                        dst = new HashMap<>();
+                        dst = new LinkedHashMap<>();
                         this.defaultProps.put(targetSection, dst);
                     }
                     dst.put(defaultActionName, actions);
@@ -343,32 +345,12 @@ public class DefaultAction {
         }
     }
 
-    private class SortedProperties extends Properties {
+    private OrderedProperties toProperties() {
+        OrderedProperties props = new OrderedProperties();
 
-        @Override
-        public Set<Object> keySet() {
-            return new TreeSet<>(super.keySet());
-        }
-
-        @Override
-        public Set<Map.Entry<Object, Object>> entrySet() {
-            Set<Map.Entry<Object, Object>> sortedSet = new TreeSet<>(
-                Comparator.comparing(e -> String.valueOf(e.getKey()))
-            );
-            sortedSet.addAll(super.entrySet());
-            return sortedSet;
-        }
-
-        @Override
-        public synchronized Enumeration<Object> keys() {
-            return Collections.enumeration(new TreeSet<>(super.keySet()));
-        }
-    }
-
-    private SortedProperties toProperties() {
-        SortedProperties props = new SortedProperties();
-
-        for(Target k: Target.values()) {
+        Target[] values = Target.values();
+        Arrays.sort(values, Comparator.comparing(Enum::name));
+        for(Target k: values) {
             String keyName = k.name().toLowerCase();
             String[] prefixParts = keyName.split("_");
             if (prefixParts.length == 2) {

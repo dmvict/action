@@ -62,6 +62,7 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
                         hud.consoleOutput("Saved default actions to file " + DefaultAction.CONFIG_PATH.toString());
                         return true;
                     } else if (data[1].equals("load")) {
+                        defaultAction = new DefaultAction();
                         DefaultAction.loadDefaultActios(defaultAction);
                         hud.consoleOutput("Loaded default actions from file " + DefaultAction.CONFIG_PATH.toString());
                         return true;
