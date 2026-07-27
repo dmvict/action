@@ -7,11 +7,13 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,24 +33,7 @@ public class DefaultAction {
     static final String DEFAULT_OPTION_NAME = "default";
 
     public static short[] defaultEntry = {(short) 1, (short) 1};
-    public Map<String, short[]> activatedDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> areaDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> bodyDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> eqDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> hoverDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> nearbyDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> selectedDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tbDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileEDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileNDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileNEDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileNWDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileSDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileSEDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileSWDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> tileWDefaultProps = new HashMap<String, short[]>();
-    public Map<String, short[]> toolbeltDefaultProps = new HashMap<String, short[]>();
+    public Map<Target, Map<String, short[]>> defaultProps = new HashMap<>();
 
     private static Map<String, Patterns> patterns = new HashMap<String, Patterns>();
 
@@ -75,7 +60,7 @@ public class DefaultAction {
     public static DefaultAction loadDefaultActios(DefaultAction defaultAction) throws Throwable {
 
         // Get config for default actions and parse options
-        Properties props = new Properties();
+        OrderedProperties props = new OrderedProperties();
         if (Files.exists(CONFIG_PATH)) {
             try (InputStream in = Files.newInputStream(CONFIG_PATH)) {
                 props.load(in);
@@ -84,84 +69,47 @@ public class DefaultAction {
                 throw new Throwable(e.toString());
             }
         }
-        List<String> keys = new ArrayList<>(props.stringPropertyNames());
-        Collections.sort(keys);
 
-        // order of adding of props is alphabetical since the keys are sorted alphabetically
-        // items handled related to the Target enum
-        // ACTIVATED 
-        // AREA
-        // BODY
-        // EQ
-        // HOVER
-        // NEARBY
-        // SELECTED
-        // TB
-        // TILE
-        // TILE_E
-        // TILE_N
-        // TILE_NE
-        // TILE_NW
-        // TILE_S
-        // TILE_SE
-        // TILE_SW
-        // TILE_W
-        // TOOLBELT
-
-        int counter = 0;
-        counter = defaultAction.fillProps(props, keys, Target.ACTIVATED.name().toLowerCase(), counter, defaultAction.activatedDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.AREA.name().toLowerCase(), counter, defaultAction.areaDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.BODY.name().toLowerCase(), counter, defaultAction.bodyDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.EQ.name().toLowerCase(), counter, defaultAction.eqDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.HOVER.name().toLowerCase(), counter, defaultAction.hoverDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.NEARBY.name().toLowerCase(), counter, defaultAction.nearbyDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.SELECTED.name().toLowerCase(), counter, defaultAction.selectedDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TB.name().toLowerCase(), counter, defaultAction.tbDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE.name().toLowerCase(), counter, defaultAction.tileDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_E.name().toLowerCase(), counter, defaultAction.tileEDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_N.name().toLowerCase(), counter, defaultAction.tileNDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_NE.name().toLowerCase(), counter, defaultAction.tileNEDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_NW.name().toLowerCase(), counter, defaultAction.tileNWDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_S.name().toLowerCase(), counter, defaultAction.tileSDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_SE.name().toLowerCase(), counter, defaultAction.tileSEDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_SW.name().toLowerCase(), counter, defaultAction.tileSWDefaultProps);
-        counter = defaultAction.fillProps(props, keys, Target.TILE_W.name().toLowerCase(), counter, defaultAction.tileWDefaultProps);
-        defaultAction.fillProps(props, keys, Target.TOOLBELT.name().toLowerCase(), counter, defaultAction.toolbeltDefaultProps);
-
-        //
+        defaultAction.fillProps(props);
 
         return defaultAction;
     }
 
-    private int fillProps(Properties props, List<String> keys, final String sectionName, int startPos, Map<String, short[]> dst) {
-        final int keysSize = keys.size();
-        if (startPos >= keysSize) {
-            return startPos;
-        }
+    private void fillProps(OrderedProperties props) {
 
-        String key = keys.get(startPos);
-        while (key.startsWith(sectionName) && startPos < keysSize) {
-            Optional<String> defaultActionNameE = DefaultAction.getPropertyName(key, sectionName);
-            if (!defaultActionNameE.isPresent()) {
+        List<String> keys = new ArrayList<>(props.stringPropertyNames());
+
+        for (String key: keys) {
+
+            Optional<String[]> actionSplitsE = DefaultAction.getPropertyName(key);
+            if (!actionSplitsE.isPresent()) {
                 System.out.println("Failed to read section property. Format is [section_name].[section_value]");
-                startPos += 1;
-                key = keys.get(startPos);
+                System.out.println("Skip and continue");
                 continue;
             }
 
             Optional<short[]> actionsE = DefaultAction.getActions(props.getProperty(key), (short) 1);
+
             if (actionsE.isPresent()) {
-                String defaultActionName = defaultActionNameE.get();
+                Optional<Target> targetSectionNameE = Target.parseTargetSafe(actionSplitsE.get()[0].trim());
+                if (!targetSectionNameE.isPresent()) {
+                    System.out.println("Invalid section name: " + actionSplitsE.get()[0]);
+                    System.out.println("Skip and continue");
+                    continue;
+                }
+                Target targetSection = targetSectionNameE.get();
+                String targetSectionName = targetSection.name().toLowerCase();
+                String defaultActionName = actionSplitsE.get()[1].trim();
                 short[] actions = actionsE.get();
 
                 boolean startsWithAsterisk = defaultActionName.startsWith("*");
                 boolean endsWithAsterisk = defaultActionName.endsWith("*");
                 if (startsWithAsterisk || endsWithAsterisk) {
-                    Patterns sectionPatterns = patterns.get(sectionName);
+                    Patterns sectionPatterns = patterns.get(targetSectionName);
                     String patternName = null;
                     if (sectionPatterns == null) {
                         sectionPatterns = new Patterns();
-                        patterns.put(sectionName, sectionPatterns);
+                        patterns.put(targetSectionName, sectionPatterns);
                     }
                     if (startsWithAsterisk && endsWithAsterisk) {
                         patternName = defaultActionName.substring(1, defaultActionName.length() - 1);
@@ -175,26 +123,24 @@ public class DefaultAction {
                     }
                     sectionPatterns.patterns.put(patternName, actions);
                 } else {
+                    Map<String, short[]> dst = this.defaultProps.get(targetSection);
+                    if (dst == null) {
+                        dst = new HashMap<>();
+                        this.defaultProps.put(targetSection, dst);
+                    }
                     dst.put(defaultActionName, actions);
                 }
             }
-
-            startPos += 1;
-            if (startPos < keysSize) {
-                key = keys.get(startPos);
-            }
         }
-
-        return startPos;
     }
 
-    private static Optional<String> getPropertyName(final String key, final String sectionName) {
+    private static Optional<String[]> getPropertyName(final String key) {
         String[] keyParts = key.split("\\.", 2);
         if (keyParts.length == 1) {
             System.out.println("Failed to read section property. Format is [section_name].[section_value]");
             return Optional.empty();
         } else {
-            return Optional.of(keyParts[1]);
+            return Optional.of(keyParts);
         }
     }
 
@@ -237,43 +183,23 @@ public class DefaultAction {
             } else {
                 obj_name = obj.getHoverName();
             }
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.hoverDefaultProps, obj_name, pats, action);
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), obj_name, pats, action);
         } else if (target == Target.BODY) {
             Optional<InventoryMetaItem> itemOpt = Reflect.getBodyItem(hud.getPaperDollInventory());
             if (itemOpt.isPresent()) {
                 InventoryMetaItem item = itemOpt.get();
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.bodyDefaultProps, item.getBaseName(), pats, action);
+                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), item.getBaseName(), pats, action);
             }
-        } else if (target == Target.TILE) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_N) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileNDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_W) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileWDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_NW) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileNWDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_NE) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileNEDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_S) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_E) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileEDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_SE) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSEDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.TILE_SW) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tileSWDefaultProps, DEFAULT_OPTION_NAME, pats, action);
-        } else if (target == Target.AREA) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.areaDefaultProps, DEFAULT_OPTION_NAME, pats, action);
         } else if (target == Target.ACTIVATED) {
             Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
             if (t.isPresent()) {
                 InventoryMetaItem item = t.get();
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.activatedDefaultProps, item.getBaseName(), pats, action);
+                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), item.getBaseName(), pats, action);
             }
         } else if (target == Target.SELECTED) {
             Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
             if (p.isPresent()) {
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.selectedDefaultProps, p.get().getHoverName(), pats, action);
+                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), p.get().getHoverName(), pats, action);
             }
         } else if (target == Target.TOOLBELT) {
             String toolbeltItemSelector = null;
@@ -290,13 +216,11 @@ public class DefaultAction {
                 }
             }
         
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.toolbeltDefaultProps, toolbeltItemSelector, pats, action);
-        } else if (target == Target.TB) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.tbDefaultProps, Integer.toString(target.getId()), pats, action);
-        } else if (target == Target.EQ) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.eqDefaultProps, Integer.toString(target.getId()), pats, action);
-        } else if (target == Target.NEARBY) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.nearbyDefaultProps, Integer.toString(target.getId()), pats, action);
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), toolbeltItemSelector, pats, action);
+        } else if (target == Target.TB || target == Target.EQ || target == Target.NEARBY) {
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), Integer.toString(target.getId()), pats, action);
+        } else {
+            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), DEFAULT_OPTION_NAME, pats, action);
         }
 
         //
@@ -379,6 +303,46 @@ public class DefaultAction {
         return joiner.toString();
     }
 
+    private static class OrderedProperties extends Properties {
+        private final LinkedHashSet<Object> insertionOrder = new LinkedHashSet<>();
+
+        @Override
+        public synchronized Object put(Object key, Object value) {
+            insertionOrder.add(key);
+            return super.put(key, value);
+        }
+
+        @Override
+        public Set<Object> keySet() {
+            return insertionOrder;
+        }
+
+        @Override
+        public Set<String> stringPropertyNames() {
+            LinkedHashSet<String> ordered = new LinkedHashSet<>();
+            for (Object key : insertionOrder) {
+                if (key instanceof String && get(key) instanceof String) {
+                    ordered.add((String) key);
+                }
+            }
+            return ordered;
+        }
+
+        @Override
+        public Set<Map.Entry<Object, Object>> entrySet() {
+            Set<Map.Entry<Object, Object>> ordered = new LinkedHashSet<>();
+            for (Object key : insertionOrder) {
+                ordered.add(new AbstractMap.SimpleEntry<>(key, get(key)));
+            }
+            return ordered;
+        }
+
+        @Override
+        public synchronized Enumeration<Object> keys() {
+            return Collections.enumeration(insertionOrder);
+        }
+    }
+
     private class SortedProperties extends Properties {
 
         @Override
@@ -405,31 +369,25 @@ public class DefaultAction {
         SortedProperties props = new SortedProperties();
 
         for(Target k: Target.values()) {
-            try {
-                String keyName = k.name().toLowerCase();
-                String[] prefixParts = keyName.split("_");
-                if (prefixParts.length == 2) {
-                    prefixParts[1] = prefixParts[1].toUpperCase();
+            String keyName = k.name().toLowerCase();
+            String[] prefixParts = keyName.split("_");
+            if (prefixParts.length == 2) {
+                prefixParts[1] = prefixParts[1].toUpperCase();
+            }
+            String prefix = String.join("", prefixParts);
+            HashMap<String, short[]> fieldValue = (HashMap<String, short[]>) this.defaultProps.get(k);
+            if (fieldValue != null) {
+                for (Map.Entry<String, short[]> entry : fieldValue.entrySet()) {
+                    props.setProperty(prefix + "." + entry.getKey(), shortArrayToString(entry.getValue()));
                 }
-                String prefix = String.join("", prefixParts);
-                Field field = this.getClass().getDeclaredField(prefix + "DefaultProps");
-                field.setAccessible(true);
-                HashMap<String, short[]> fieldValue = (HashMap<String, short[]>) field.get(this);
-                if (fieldValue != null) {
-                    for (Map.Entry<String, short[]> entry : fieldValue.entrySet()) {
-                        props.setProperty(prefix + "." + entry.getKey(), shortArrayToString(entry.getValue()));
-                    }
-                }
-                
-                Patterns currentPatterns = patterns.get(keyName);
-                if (currentPatterns != null) {
-                    currentPatterns.startsWithList.stream().forEach(p -> props.setProperty(prefix + "." + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
-                    currentPatterns.endsWithList.stream().forEach(p -> props.setProperty(prefix + ".*" + p, shortArrayToString(currentPatterns.patterns.get(p))));
-                    currentPatterns.containsList.stream().forEach(p -> props.setProperty(prefix + ".*" + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
-                }
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException("Could not access field:", e);
-            }            
+            }
+            
+            Patterns currentPatterns = patterns.get(keyName);
+            if (currentPatterns != null) {
+                currentPatterns.startsWithList.stream().forEach(p -> props.setProperty(prefix + "." + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
+                currentPatterns.endsWithList.stream().forEach(p -> props.setProperty(prefix + ".*" + p, shortArrayToString(currentPatterns.patterns.get(p))));
+                currentPatterns.containsList.stream().forEach(p -> props.setProperty(prefix + ".*" + p + "*", shortArrayToString(currentPatterns.patterns.get(p))));
+            }
         }
 
         return props;
@@ -443,24 +401,24 @@ public class DefaultAction {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("DefaultAction {");
-        sb.append("activatedDefaultProps=").append(activatedDefaultProps.toString()).append('\'');
-        sb.append(", areaDefaultProps=").append(areaDefaultProps.toString());
-        sb.append(", bodyDefaultProps=").append(bodyDefaultProps.toString());
-        sb.append(", eqDefaultProps=").append(eqDefaultProps.toString());
-        sb.append(", hoverDefaultProps=").append(hoverDefaultProps.toString());
-        sb.append(", nearbyDefaultProps=").append(nearbyDefaultProps.toString());
-        sb.append(", selectedDefaultProps=").append(selectedDefaultProps.toString());
-        sb.append(", tbDefaultProps=").append(tbDefaultProps.toString());
-        sb.append(", tileDefaultProps=").append(tileDefaultProps.toString());
-        sb.append(", tileEDefaultProps=").append(tileEDefaultProps.toString());
-        sb.append(", tileNDefaultProps=").append(tileNDefaultProps.toString());
-        sb.append(", tileNEDefaultProps=").append(tileNEDefaultProps.toString());
-        sb.append(", tileNWDefaultProps=").append(tileNWDefaultProps.toString());
-        sb.append(", tileSDefaultProps=").append(tileSDefaultProps.toString());
-        sb.append(", tileSEDefaultProps=").append(tileSEDefaultProps.toString());
-        sb.append(", tileSWDefaultProps=").append(tileSWDefaultProps.toString());
-        sb.append(", tileWDefaultProps=").append(tileWDefaultProps.toString());
-        sb.append(", toolbeltDefaultProps=").append(toolbeltDefaultProps.toString());
+        sb.append("activatedDefaultProps=").append(defaultProps.get(Target.ACTIVATED).toString()).append('\'');
+        sb.append(", areaDefaultProps=").append(defaultProps.get(Target.AREA).toString());
+        sb.append(", bodyDefaultProps=").append(defaultProps.get(Target.BODY).toString());
+        sb.append(", eqDefaultProps=").append(defaultProps.get(Target.EQ).toString());
+        sb.append(", hoverDefaultProps=").append(defaultProps.get(Target.HOVER).toString());
+        sb.append(", nearbyDefaultProps=").append(defaultProps.get(Target.NEARBY).toString());
+        sb.append(", selectedDefaultProps=").append(defaultProps.get(Target.SELECTED).toString());
+        sb.append(", tbDefaultProps=").append(defaultProps.get(Target.TB).toString());
+        sb.append(", tileDefaultProps=").append(defaultProps.get(Target.TILE).toString());
+        sb.append(", tileEDefaultProps=").append(defaultProps.get(Target.TILE_E).toString());
+        sb.append(", tileNDefaultProps=").append(defaultProps.get(Target.TILE_N).toString());
+        sb.append(", tileNEDefaultProps=").append(defaultProps.get(Target.TILE_NE).toString());
+        sb.append(", tileNWDefaultProps=").append(defaultProps.get(Target.TILE_NW).toString());
+        sb.append(", tileSDefaultProps=").append(defaultProps.get(Target.TILE_S).toString());
+        sb.append(", tileSEDefaultProps=").append(defaultProps.get(Target.TILE_SE).toString());
+        sb.append(", tileSWDefaultProps=").append(defaultProps.get(Target.TILE_SW).toString());
+        sb.append(", tileWDefaultProps=").append(defaultProps.get(Target.TILE_W).toString());
+        sb.append(", toolbeltDefaultProps=").append(defaultProps.get(Target.TOOLBELT).toString());
         sb.append(", patterns=");
         patterns.keySet().stream().forEach(key -> sb.append(", " + key + "=").append(patterns.get(key)));
         sb.append('}');
