@@ -31,23 +31,44 @@ public class DefaultAction {
     // TODO: probably there are constants that could be used instead of literals
     static final Path CONFIG_PATH = Paths.get("mods/action", "act_default.properties");
     static final String DEFAULT_OPTION_NAME = "default";
+    static final String RUNTIME_UPDATE_KEY = "runtime_update";
 
     public static short[] defaultEntry = {(short) 1, (short) 1};
     public Map<Target, Map<String, short[]>> defaultProps = new HashMap<>();
-    private static Map<String, Patterns> patterns = new HashMap<>();
+    public Map<String, Patterns> patterns = new HashMap<>();
+    private boolean runtimeUpdate = false;
 
-    public static enum Action {
+    public static enum ActionKind {
         DEFAULT(0),
         ALT(1);
 
         private final int value;
 
-        private Action(int value) {
+        private ActionKind(int value) {
             this.value = value;
         }
 
         public int getValue() {
             return value;
+        }
+    }
+
+    public static enum ActionIds {
+        REGULAR(defaultEntry.clone()),
+        ACTIVATED(defaultEntry.clone());
+
+        private short[] value;
+
+        private ActionIds(short[] value) {
+            this.value = value;
+        }
+
+        public short[] getValue() {
+            return value;
+        }
+
+        public void setValue(final short[] value) {
+            this.value = value;
         }
     }
 
@@ -69,6 +90,8 @@ public class DefaultAction {
             }
         }
 
+        defaultAction.runtimeUpdate = Boolean.parseBoolean(props.getProperty(RUNTIME_UPDATE_KEY, "false"));
+        props.remove(RUNTIME_UPDATE_KEY);
         defaultAction.fillProps(props);
 
         return defaultAction;
@@ -101,14 +124,13 @@ public class DefaultAction {
                 String defaultActionKey = actionPartsOpt.get()[1].trim();
                 short[] actions = actionsE.get();
 
-                if (defaultActionKey.contains("*")) {
+                if (defaultActionKey.contains("*") || defaultActionKey.contains("&&")) {
                     Patterns sectionPatterns = patterns.get(targetSectionName);
                     if (sectionPatterns == null) {
                         sectionPatterns = new Patterns();
                         patterns.put(targetSectionName, sectionPatterns);
                     }
                     sectionPatterns.add(new Pattern(defaultActionKey), actions);
-
                 } else {
                     Map<String, short[]> dst = this.defaultProps.get(targetSection);
                     if (dst == null) {
@@ -135,13 +157,13 @@ public class DefaultAction {
         String[] actionParts = actionsStr.split("\\|");
 
         try {
-            Short alt_act = null; 
+            Short altAct = null; 
             if (actionParts.length == 1) {
-                alt_act = defaultAct;
+                altAct = defaultAct;
             } else {
-                alt_act = Short.parseShort(actionParts[1]);
+                altAct = Short.parseShort(actionParts[1]);
             }
-            short[] entry = {Short.parseShort(actionParts[0]), alt_act};
+            short[] entry = {Short.parseShort(actionParts[0]), altAct};
             return Optional.of(entry);
         } catch (NumberFormatException nfe) {
             System.out.println("Failed to read property values. Should be numbers divided by bar: [n1]|[n2] or single number.");
@@ -149,97 +171,116 @@ public class DefaultAction {
         }
     }
 
-    public Optional<Short> getAction(final Target target, final Action actionE, final HeadsUpDisplay hud) {
-        Short act_id = null;
+    public Short getAction(final Target target, final ActionKind actionE, final HeadsUpDisplay hud) {
         int action = actionE.getValue();
         Patterns pats = patterns.get(target.name().toLowerCase());
+        Optional<InventoryMetaItem> activated = Reflect.getActiveToolItem(hud);
+        final Optional<String> activatedName = activated.map(item -> item.getBaseName());
         // Used if-else pattern instead of switch.
         // In comparison to Rust, Java doesn't track all enum members
         // and it is more safe to use this statements
+        String baseName = null;
         if (target == Target.HOVER) {
             PickableUnit obj = hud.getWorld().getCurrentHoveredObject();
-            String obj_name = null; 
             if (obj == null) {
-                Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
-                if (t.isPresent()) {
-                    InventoryMetaItem item = t.get();
-                    obj_name = item.getBaseName();
+                if (activated.isPresent()) {
+                    InventoryMetaItem item = activated.get();
+                    baseName = item.getBaseName();
                 } else {
-                    obj_name = DEFAULT_OPTION_NAME;
+                    baseName = DEFAULT_OPTION_NAME;
                 }
             } else {
-                obj_name = obj.getHoverName();
+                baseName = obj.getHoverName();
             }
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), obj_name, pats, action);
         } else if (target == Target.BODY) {
             Optional<InventoryMetaItem> itemOpt = Reflect.getBodyItem(hud.getPaperDollInventory());
             if (itemOpt.isPresent()) {
-                InventoryMetaItem item = itemOpt.get();
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), item.getBaseName(), pats, action);
+                baseName = itemOpt.get().getBaseName();
             }
         } else if (target == Target.ACTIVATED) {
             Optional<InventoryMetaItem> t = Reflect.getActiveToolItem(hud);
-            if (t.isPresent()) {
-                InventoryMetaItem item = t.get();
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), item.getBaseName(), pats, action);
+            if (activated.isPresent()) {
+                baseName = activated.get().getBaseName();
             }
         } else if (target == Target.SELECTED) {
             Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
             if (p.isPresent()) {
-                act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), p.get().getHoverName(), pats, action);
+                baseName =  p.get().getHoverName();
             }
         } else if (target == Target.TOOLBELT) {
-            String toolbeltItemSelector = null;
-
             PickableUnit obj = hud.getWorld().getCurrentHoveredObject();
             if (obj != null) {
-                toolbeltItemSelector = obj.getHoverName();
+                baseName = obj.getHoverName();
             } else {
                 Optional<PickableUnit> p = Reflect.getSelectedUnit(hud.getSelectBar());
                 if (p.isPresent()) {
-                    toolbeltItemSelector = p.get().getHoverName();
+                    baseName = p.get().getHoverName();
                 } else {
-                    toolbeltItemSelector = DEFAULT_OPTION_NAME;
+                    baseName = DEFAULT_OPTION_NAME;
                 }
             }
-        
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), toolbeltItemSelector, pats, action);
         } else if (target == Target.TB || target == Target.EQ || target == Target.NEARBY) {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), Integer.toString(target.getId()), pats, action);
+            baseName = Integer.toString(target.getId());
         } else {
-            act_id = DefaultAction.getActionIdOrUpdateFromPatterns(this.defaultProps.getOrDefault(target, new HashMap<>()), DEFAULT_OPTION_NAME, pats, action);
+            baseName = DEFAULT_OPTION_NAME;
         }
+
+        if (baseName == null) {
+            baseName = DEFAULT_OPTION_NAME;
+        }
+
+        Short actId = DefaultAction.getActionIdOrUpdateFromPatterns(
+            this.defaultProps.getOrDefault(target, new HashMap<>()), 
+            this.runtimeUpdate,
+            baseName, 
+            pats, 
+            activatedName,
+            action
+        );
 
         //
         
-        if (act_id != null) {
-            return Optional.of(act_id);
-        }
-        return Optional.empty();
+        return actId;
     }
 
-    private static short getActionIdOrUpdateFromPatterns(Map<String, short[]> container, final String item_name, final Patterns patterns, final int action) {
-        short act_id = defaultEntry[action];
-        short[] act_ids = container.get(item_name);
-        if (act_ids == null) {
+    private static short getActionIdOrUpdateFromPatterns(
+        Map<String, short[]> container, 
+        boolean updateContainer,
+        final String itemName, 
+        final Patterns patterns, 
+        final Optional<String> activated,
+        final int action
+    ) {
+        short actId = defaultEntry[action];
+        short[] actIds = container.get(itemName);
+        if (actIds == null || itemName.equals(DEFAULT_OPTION_NAME)) {
             if (patterns != null) {
-                short[] entry = patterns.get(item_name);
-                if (entry != null) {
-                    container.put(item_name, entry);
-                    act_id = entry[action];
-                } 
+                final ActionIds entry = patterns.get(itemName, activated);
+                if (updateContainer && entry == ActionIds.REGULAR && entry != null) {
+                    container.put(itemName, entry.getValue());
+                    actId = entry.getValue()[action];
+                } else if (entry != null) {
+                    actId = entry.getValue()[action];
+                }
             }
-            // double check
-            if (act_id == defaultEntry[action]) {
-                short[] default_ids = container.get(DEFAULT_OPTION_NAME);
-                if (default_ids != null) {
-                    act_id = default_ids[action];
+
+            // double check that the value is changed otherwise it's making fallback to default
+            if (actId == defaultEntry[action] && patterns != null) {
+                final ActionIds entry = patterns.get(DEFAULT_OPTION_NAME, activated);
+                if (entry != null) {
+                    actId = entry.getValue()[action];
+                }
+            } 
+            if (actId == defaultEntry[action]) {
+                short[] defaultIds = container.get(DEFAULT_OPTION_NAME);
+                if (defaultIds != null) {
+                    actId = defaultIds[action];
                 }
             }
         } else {
-            act_id = act_ids[action];
+            actId = actIds[action];
         }
-        return act_id;
+        return actId;
     }
 
     /* utilitary */
@@ -247,7 +288,8 @@ public class DefaultAction {
     private static enum Cmp {
         STARTS,
         CONTAINS,
-        ENDS;
+        ENDS,
+        EQ;
     }
 
     private static class PatternEntry {
@@ -263,9 +305,12 @@ public class DefaultAction {
             } else if (startsWithAsterisk) {
                 this.value = pattern.substring(1);
                 this.cmp = Cmp.ENDS;
-            } else {
+            } else if (endsWithAsterisk) {
                 this.value = pattern.substring(0, pattern.length() - 1);
                 this.cmp = Cmp.STARTS;
+            } else {
+                this.value = pattern;
+                this.cmp = Cmp.EQ;
             }
         }
 
@@ -277,6 +322,8 @@ public class DefaultAction {
                 return src.endsWith(this.value);
             } else if (this.cmp == Cmp.CONTAINS) {
                 return src.contains(this.value);
+            } else if (this.cmp == Cmp.EQ) {
+                return src.equals(this.value); 
             } else {
                 return false;
             }
@@ -290,6 +337,8 @@ public class DefaultAction {
                 return "*" + this.value;
             } else if (this.cmp == Cmp.CONTAINS) {
                 return "*" + this.value + "*";
+            } else if (this.cmp == Cmp.EQ) {
+                return this.value;
             } else {
                 return "";
             }
@@ -299,22 +348,32 @@ public class DefaultAction {
     private static class Pattern {
         public PatternEntry firstEntry;
         public Optional<PatternEntry> secondEntry;
+        private boolean secondEntryMatchActivated = false;
 
         Pattern(final String pattern) {
             String[] patternSplits = pattern.split("&&");
             if (patternSplits.length == 2) {
                 this.firstEntry = new PatternEntry(patternSplits[0]);
-                this.secondEntry = Optional.of(new PatternEntry(patternSplits[1]));
+                if (patternSplits[1].startsWith("@activated")) {
+                    this.secondEntryMatchActivated = true;
+                    this.secondEntry = Optional.of(new PatternEntry(patternSplits[1].substring(10)));
+                } else {
+                    this.secondEntry = Optional.of(new PatternEntry(patternSplits[1]));
+                }
             } else {
                 this.firstEntry = new PatternEntry(patternSplits[0]);
                 this.secondEntry = Optional.empty();
             }
         }
 
-        public boolean matches(final String src) {
+        public boolean matches(final String src, final Optional<String> activated) {
             boolean matches = firstEntry.matches(src);
-            if ( matches && this.secondEntry.isPresent()) {
-                matches = secondEntry.get().matches(src);
+            if (matches && this.secondEntry.isPresent()) {
+                if (this.secondEntryMatchActivated && activated.isPresent()) {
+                    matches = secondEntry.get().matches(activated.get());
+                } else {
+                    matches = secondEntry.get().matches(src);
+                }
             } 
             return matches;
         }
@@ -322,7 +381,11 @@ public class DefaultAction {
         @Override
         public String toString() {
             if (this.secondEntry.isPresent()) {
-                return this.firstEntry.toString() + "&&" + this.secondEntry.get().toString();
+                if (this.secondEntryMatchActivated) {
+                    return this.firstEntry.toString() + "&&@activated" + this.secondEntry.get().toString();
+                } else {
+                    return this.firstEntry.toString() + "&&" + this.secondEntry.get().toString();
+                }
             } else {
                 return this.firstEntry.toString();
             } 
@@ -345,18 +408,26 @@ public class DefaultAction {
             sb.append("patternsList=[");
             for (Pattern p: patternsList) {
                 sb.append(p.firstEntry.toString() + 
-                (p.secondEntry.isPresent() ? "&&" + p.secondEntry.get().toString() : ""));
+                (p.secondEntry.isPresent() ? "&&" + p.secondEntry.get().toString() : "") + ", ");
             }
-            sb.append("]");
-            sb.append(", patternsMap=").append(patternsMap.toString());
-            sb.append('}');
+            sb.delete(sb.length() - 2, sb.length());
+            sb.append("]}\n");
             return sb.toString(); 
         }
 
-        public short[] get(final String src) {
+        public ActionIds get(final String src, final Optional<String> activated) {
             for (Pattern p: patternsList) {
-                if (p.matches(src)) {
-                    return patternsMap.get(p);
+                if (p.matches(src, activated)) {
+                    final short[] actions = patternsMap.get(p);
+                    if (p.secondEntryMatchActivated) {
+                        ActionIds result = ActionIds.ACTIVATED;
+                        result.setValue(actions);
+                        return result;
+                    } else {
+                        ActionIds result = ActionIds.REGULAR;
+                        result.setValue(actions);
+                        return result;
+                    }
                 }
             }
             return null;
@@ -413,16 +484,19 @@ public class DefaultAction {
 
     private OrderedProperties toProperties() {
         OrderedProperties props = new OrderedProperties();
+        props.setProperty(RUNTIME_UPDATE_KEY, String.valueOf(runtimeUpdate));
 
         Target[] values = Target.values();
         Arrays.sort(values, Comparator.comparing(Enum::name));
+        
         for(Target k: values) {
-            String keyName = k.name().toLowerCase();
-            String[] prefixParts = keyName.split("_");
-            if (prefixParts.length == 2) {
-                prefixParts[1] = prefixParts[1].toUpperCase();
+            String prefix;            
+            if (k == Target.EQ || k == Target.NEARBY || k == Target.TB) {
+                prefix = "@" + k.name().toLowerCase() + k.getId();
+            } else {
+                prefix = k.name().toLowerCase();
             }
-            String prefix = String.join("", prefixParts);
+
             HashMap<String, short[]> fieldValue = (HashMap<String, short[]>) this.defaultProps.get(k);
             if (fieldValue != null) {
                 for (Map.Entry<String, short[]> entry : fieldValue.entrySet()) {
@@ -430,7 +504,7 @@ public class DefaultAction {
                 }
             }
             
-            Patterns currentPatterns = patterns.get(keyName);
+            Patterns currentPatterns = patterns.get(prefix);
             if (currentPatterns != null) {
                 currentPatterns.patternsList.stream().forEach(p -> 
                     props.setProperty(prefix + "." + p.toString(), shortArrayToString(currentPatterns.patternsMap.get(p)))
@@ -449,27 +523,45 @@ public class DefaultAction {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("DefaultAction {");
-        sb.append("activatedDefaultProps=").append(defaultProps.get(Target.ACTIVATED).toString()).append('\'');
-        sb.append(", areaDefaultProps=").append(defaultProps.get(Target.AREA).toString());
-        sb.append(", bodyDefaultProps=").append(defaultProps.get(Target.BODY).toString());
-        sb.append(", eqDefaultProps=").append(defaultProps.get(Target.EQ).toString());
-        sb.append(", hoverDefaultProps=").append(defaultProps.get(Target.HOVER).toString());
-        sb.append(", nearbyDefaultProps=").append(defaultProps.get(Target.NEARBY).toString());
-        sb.append(", selectedDefaultProps=").append(defaultProps.get(Target.SELECTED).toString());
-        sb.append(", tbDefaultProps=").append(defaultProps.get(Target.TB).toString());
-        sb.append(", tileDefaultProps=").append(defaultProps.get(Target.TILE).toString());
-        sb.append(", tileEDefaultProps=").append(defaultProps.get(Target.TILE_E).toString());
-        sb.append(", tileNDefaultProps=").append(defaultProps.get(Target.TILE_N).toString());
-        sb.append(", tileNEDefaultProps=").append(defaultProps.get(Target.TILE_NE).toString());
-        sb.append(", tileNWDefaultProps=").append(defaultProps.get(Target.TILE_NW).toString());
-        sb.append(", tileSDefaultProps=").append(defaultProps.get(Target.TILE_S).toString());
-        sb.append(", tileSEDefaultProps=").append(defaultProps.get(Target.TILE_SE).toString());
-        sb.append(", tileSWDefaultProps=").append(defaultProps.get(Target.TILE_SW).toString());
-        sb.append(", tileWDefaultProps=").append(defaultProps.get(Target.TILE_W).toString());
-        sb.append(", toolbeltDefaultProps=").append(defaultProps.get(Target.TOOLBELT).toString());
-        sb.append(", patterns=");
-        patterns.keySet().stream().forEach(key -> sb.append(", " + key + "=").append(patterns.get(key)));
-        sb.append('}');
+        sb.append("runtime_update=").append(String.valueOf(runtimeUpdate)).append("\n");
+        sb.append("activatedDefaultProps=").append(defaultProps.getOrDefault(Target.ACTIVATED, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("areaDefaultProps=").append(defaultProps.getOrDefault(Target.AREA, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("bodyDefaultProps=").append(defaultProps.getOrDefault(Target.BODY, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("eqDefaultProps=").append(defaultProps.getOrDefault(Target.EQ, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("hoverDefaultProps=").append(defaultProps.getOrDefault(Target.HOVER, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("nearbyDefaultProps=").append(defaultProps.getOrDefault(Target.NEARBY, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("selectedDefaultProps=").append(defaultProps.getOrDefault(Target.SELECTED, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tbDefaultProps=").append(defaultProps.getOrDefault(Target.TB, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileDefaultProps=").append(defaultProps.getOrDefault(Target.TILE, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileEDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_E, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileNDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_N, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileNEDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_NE, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileNWDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_NW, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileSDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_S, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileSEDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_SE, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileSWDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_SW, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("tileWDefaultProps=").append(defaultProps.getOrDefault(Target.TILE_W, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("toolbeltDefaultProps=").append(defaultProps.getOrDefault(Target.TOOLBELT, new LinkedHashMap<>()).keySet().toString()).append(',');
+        sb.append("\n");
+        sb.append("patterns=").append(patterns.toString());
+        sb.append("}");
         return sb.toString(); 
     }
 }

@@ -1,8 +1,8 @@
 package net.bdew.wurm.action;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -62,11 +62,15 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
                         hud.consoleOutput("Saved default actions to file " + DefaultAction.CONFIG_PATH.toString());
                         return true;
                     } else if (data[1].equals("load")) {
-                        defaultAction = new DefaultAction();
+                        defaultAction.defaultProps = new HashMap<>();
+                        defaultAction.patterns = new HashMap<>();
                         DefaultAction.loadDefaultActios(defaultAction);
                         hud.consoleOutput("Loaded default actions from file " + DefaultAction.CONFIG_PATH.toString());
                         return true;
-                    } 
+                    } else if (data[1].equals("print")) {
+                        System.out.println(defaultAction.toString());
+                        return true;
+                    }
                 } catch (Throwable e) {
                     hud.consoleOutput("act: cannot handle default properties"); 
                     hud.consoleOutput(e.toString());
@@ -155,20 +159,12 @@ public class ActionMod implements WurmClientMod, Initable, PreInitable {
         if (targetOptE.isPresent()) { 
             Target targetE = targetOptE.get();
 
-            if (strId.equals(DefaultAction.Action.DEFAULT.name().toLowerCase())) {
-                Optional<Short> default_id = defaultAction.getAction(targetE, DefaultAction.Action.DEFAULT, hud);
-                if (default_id.isPresent()) {
-                    act(default_id.get(), targetE, target);
-                } else {
-                    hud.consoleOutput("act: it doesn't have default action for target '" + target + "'");
-                }
-            } else if (strId.equals(DefaultAction.Action.ALT.name().toLowerCase())) {
-                Optional<Short> alt_id = defaultAction.getAction(targetE, DefaultAction.Action.ALT, hud);
-                if (alt_id.isPresent()) {
-                    act(alt_id.get(), targetE, target);
-                } else {
-                    hud.consoleOutput("act: it doesn't have alternative action for target '" + target + "'");
-                }
+            if (strId.equals(DefaultAction.ActionKind.DEFAULT.name().toLowerCase())) {
+                Short default_id = defaultAction.getAction(targetE, DefaultAction.ActionKind.DEFAULT, hud);
+                act(default_id, targetE, target);
+            } else if (strId.equals(DefaultAction.ActionKind.ALT.name().toLowerCase())) {
+                Short alt_id = defaultAction.getAction(targetE, DefaultAction.ActionKind.ALT, hud);
+                act(alt_id, targetE, target);
             } else {
                 try {
                     final short id = Short.parseShort(strId);
