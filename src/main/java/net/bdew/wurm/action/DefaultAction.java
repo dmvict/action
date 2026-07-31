@@ -238,6 +238,14 @@ public class DefaultAction {
             action
         );
 
+        if (target == Target.TOOLBELT) {
+            int arrangement = actId / 100;
+            if (arrangement != 0) {
+                hud.getToolBelt().loadArrangement(arrangement-1);
+                actId = (short) (actId - (arrangement * 100));
+            }
+        }
+
         //
         
         return actId;
